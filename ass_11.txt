@@ -1,0 +1,54 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+ /*C code representation for outputing nth fibonacci string*/
+void fibWord(int m,int n,int *S,int l0,int l1){//recursive function definition. m is the fn_index, n is the input from user,S is the resultant array (pass by reference),l0 is fib(m),l1 is fib(m-1)
+if (m>=n) return;//if the current index >= n (read from the user) then return.
+int i=0;
+for (i=0;i<l1;i++){//We are updating our string which is pass by reference using our old string saved in S.please see the comments in end [C2] for more explanation
+    S[l0+i]=S[i];
+}
+int t=l0;//updating l0 and l1
+l0=l0+l1;
+l1=t;
+printf("\nS[%d]:",m+1);//printing the fibonacci string at the mth step
+for (i=0;i<l0;i++) printf("%d",S[i]);
+fibWord(m+1,n,S,l0,l1);//recursive call for the next fibonacci string
+return;//return
+}
+
+
+int main(){
+int n=0;
+printf("Enter n :\n");
+scanf("%d",&n);//taking input from the user
+int a=1,b=1,t,i=0;
+while(i<n){//calculating fib(n) for allocating size
+    t=a;
+    a=a+b;
+    b=t;
+    i++;
+}
+int *S=(int *)malloc(sizeof(int)*a);//allocating required size for our resultant string
+S[0]=0;//initialising our string with{0,1}
+S[1]=1;
+printf("\n\nS[0]:0\nS[1]:01");
+fibWord(1,n,S,2,1);//calling the recursive function for printing fibonacci string
+return 0;
+}
+
+
+/*
+[S1]This is the working C code representation of our ASM assignment.Here we first calculate the fib(n) that is the nth fibonacci number where n is the input.
+Now we allocate the required size to S which stores our result String.We use bottom up approach for printing the fibonacci string
+
+[S2]Here for Sn we only need Sn-1 where Sn is Sn-1 concatenated with fib(n-2) chars of itself(Sn-1). So the length of Sn that is fib(n) will be
+fib(n-1) [length of Sn-1]+fib(n-2) [length of Sn-2].
+
+[S3]We are also printing the resultant string at every function call
+
+[S4]The time complexity is O(n) where n is the input taken from the user
+
+[S5]The space complexity is O(fib(n)) where n is the input taken from the user and fib(n) is the nth fibonacci number.
+excluding the space for recursive call stack space.
+*/

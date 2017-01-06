@@ -1,0 +1,624 @@
+﻿=======================================================
+
+Assignment 12
+Group 10
+
+Apurv Kumar						Shubham Sharma 
+14CS10006						14CS30034
+
+=======================================================
+
+
+
+*All instructions are of 16 bits.
+*Since all the general registers are 8 so they can be represented using only 3 bits
+
+The general instruction format is as follows :-
+ 
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		     |Op-code  |   Op code-Type | dst(operand 1) |  mode for operand 2  | src1(operand 2) |  src2(operand 2) | 
+			         |                   D2 (next line for operand 2) [Depends upon the mode of operand 2]   	        	 |
+
+++++There are basically two types of instructions ALU(15th bit 0) and NON-ALU (15th bit 1)
+	Now, for ALU operations it contains the following subtypes : load and store,  add,sub,and,or,compare,complement(2's) 
+	And, for NON-ALU operations it contains the following subtypes : jump(14th bit 0) and subroutine call(14th bit 1)
+
+
+Here ,
++op-code : The operation type out of 2 - ALU : Load and store, ALU    OR NON-ALU :  jump instructions and subroutine instructions.
++op-code type : The type of Load and store, ALU, jump instructions and subroutine instructions. For example, for op-code=ALU, add ,sub, load and store will have different values.
++dst(operand 1) : The destination register or operand 1. It can have only one mode i.e "reg" as per the problem statement.
++mode for operand2 : Addressing mode for operand 2. 3 bits are used as there are 6 modes for operand 2.
++src1(operand 2) : The second operand is the source and can have 6 modes.
++src2(operand 2) : This along with src1 define the operand 2 for our instruction.
++for jump instructions the first 2 bits of operand1 (dst) which is not required in jump instructions is used
++D2 : The immediate/offset value for operand 2 is stored in the next 16 bits. Its use solely depends upon the mode of addressing of the operand 2.
+
+*Interpretations are mentioned at the end of each format for every intruction.
+*For every instruction the first step is the loading up of IR register which is done as follows :
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+IR <- M[MAR] (fn-transX,TMAR-1,LIR-1,RD-1)
+PC <- PC+2 (r1-PC,r2-2,see line 46)          // PC now points to the immediate part of the instruction (essentially 16+16 bits)
+
+IR has following parts : op-code(1), op-code-type(3), rb1(3), md2(3), rb2(3), rx2(3).
+
+* binary operations like r1 <- r1+r2 is carried out in following steps : //not mentioned everywhere to keep the implementation easy to comprehend
+Y <- r2 (Tr2-1,LYX-1)
+r1 <- r1 + Y (fn-add,Tr1-1,TY-1,LDr1-1)
+
+subtract:
+Y <- r2 (Tr2-1,LYX-1)
+r1 <- r1 - Y (fn-add,Tr1-1,TY-1,LDr1-1)
+
+
+********100 in mode is for base addressing mode
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+A )  ALU :
+op-code=0
+
+
+
+I) Load and store : ld, st with a 16-bit displacement (depending upon the addressing mode).
+The dst operand for the load instruction and the src operand for the store instruction is always in register mode.
+op-code = 0
+
+
+
+
+
+	A ) Load -- General assembly instruction format:
+ld	dst src
+op-code type = 110
+
+
+
+>>Load Immediate 	(li)
++++++++++++++++++++++++++++++++++li	r5, #100	// r5 ← 100 i.e., r5 ← M[PC]; PC ← PC+2, where M[PC] is
+							// the second word of the instruction
+							// (since PC is incremented in the fetch phase)
+							// -- load immediate
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |       110      | dst(operand 1) |          00          | src1(operand 2) |  src2(operand 2) | 
+					 |                 									 IMMEDIATE 											 |
+
+MAR <- PC  (fn-transX,TPC-1,LMAR-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- MDR (fn-transX,L IR[rb1]-1,TMDR-1)
+PC <- PC+2 (r1-PC,r2-2,see line 46) (r1-PC,r2-2,see line 46)
+
+
+
+>>Load Register 	(lr)
++++++++++++++++++++++++++++++++++lr	r5, r7		// r5 ← r7 -- load register
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      110       | dst(operand 1) |          01          | src1(operand 2) |         X        | 
+
+IR[rb1] <- IR[rb2] (fn-transX,L IR[rb1] - 1, T IR[rb1]-1 )
+
+
+>>Load with Base Indexed Addressing (lx)
++++++++++++++++++++++++++++++++++lx	r5, 10(r1, r7)	// r5 ← M[r1+ r7 + 10] i.e.,
+													// r5 ← M[r1 + r7 +M[PC]]; PC ← PC+2 -- load indexed
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		 	 | 0       |     110        | dst(operand 1) |        10            | src1(operand 2) |  src2(operand 2) | 
+			 		 |                                    D2 (next line for operand 2) 			  				 		     |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)(fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- MDR (fn-transX,TMDR-1,L IR[rb1] - 1)
+PC <- PC+2 (r1-PC,r2-2,see line 46)	
+
+>>Load with Memory Indirect Addressing(ldn)
++++++++++++++++++++++++++++++++++ldn	r5, @10(r1, r7)	// r5 ← M[M[r1+ r7 + 10]] i.e.,
+														// r5 ← M[M[r1+ r7 + M[PC]]]; PC ← PC+2
+														// -- load indirect
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		     | 0       |      110       | dst(operand 1) |        11            | src1(operand 2) |  src2(operand 2) | 
+					 |                                    D2 (next line for operand 2) 			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)MAR <- MDR
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)IR[rb1] <- MDR
+PC <- PC+2 (r1-PC,r2-2,see line 46)
+
+
+
+
+	B ) Store -- General assembly instruction format:
+st	dst src	// only two addressing modes are needed
+		// -- Indexed and Indirect
+op-code type = 111
+
+
+>>Store with Base Indexed Addressing 	(stx)
+++++++++++++++++++++++++++++++++stx	-5(r2), r3	// M[r2-5] ← R3 -- base addressing
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	    	|	   5-3	      |	     2-0	 	 |
+FORMAT:  			 | 0       |      111       | dst(operand 1) |        00            | src1(operand 2) |  src2(operand 2) | 
+					 |                                    D2 (next line for operand 2) 			   							 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+MAR <- MDR + IR[rb2] (r1-PC,r2-2,see line 46)
+MDR <- IR[rb1] (fn-transX, LMDR - 1, T IR[rb1] - 1)
+PC <- PC+2 (r1-PC,r2-2,see line 46)
+
+
+>>Store with Memory Indirect Addressing (sdn)
+++++++++++++++++++++++++++++++++stn	@-5(r2), r3	// M[M[r2-5]] ← R3 i.e.,
+							// M[M[r2 + M[PC]]]; PC ← PC+2 -- indirect
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	   	    |	   5-3	      |	     2-0	 	 |
+FORMAT:  			 | 0       |      111       | dst(operand 1) |        01            | src1(operand 2) |  src2(operand 2) | 
+			 		 |                                    D2 (next line for operand 2) 			   							 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)MAR <- MDR + IR[rb2]
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)MAR <- MDR
+MDR <- IR[rb1] (fn-transX,LMDR-1,T IR[rb1])
+PC <- PC+2 (r1-PC,r2-2,see line 46)
+
+
+===================================================================================================================================================================
+
+
+
+II ) Arithmetic and logical instructions: add, sub, and, or, mns, cmp using two's complement arithmetic
+The dst operand for these instructions is always in register mode.
+
+General assembly instruction format: 
+op-code	dst/src 1	src 2
+
+op-code=0
+
+All addressing modes supported for src 2 for two operand instructions.
+
+
+
+
+
+	A ) Add
+op-code type = 000
+
+
+>>Add Immediate 			(addi)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++addi	r1, #43	// r1 ← r1 + 43 add immediate
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      000       | dst(operand 1) |          00          | src1(operand 2) |  src2(operand 2) | 
+					 |                 									 IMMEDIATE 											 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- MDR + IR[rb1]
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+>>Add Register 				(addr)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++addr	r1, r2	// r1 ← r1 + r2 add register
+
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      000       | dst(operand 1) |          01          | src1(operand 2) |         X        |
+
+IR[rb1] <- IR[rb1] + IR[rb2] (r1-IR[rb1],r2-IR[rb2], see line 46)
+PC <- PC+2 (r1-PC,r2-2,see line 46)
+
+
+>>Add with Base Indexed Addressing 	(addx)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++addx	r2,10(r1, r7)	// r2 ← r2 + M[r1+r7+10]
+																			//r2 ← r2 + M[r1 + r7 +M[PC]]; PC ← PC+2  add indexed
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		 	 | 0       |     000        | dst(operand 1) |        10            | src1(operand 2) |  src2(operand 2) | 
+			 		 |                                    D2 (next line for operand 2) 			  				             |
+
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- IR[rb1] + MDR (r1-IR[rb1], r2-MDR, see line 46)
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+>>Add with Memory Indirect Addressing 	(addn)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++addn	@-120(r2, r6)	// r4 ← r4 + M(M(r2 + r6 -120)) add indirect
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		     | 0       |      000       | dst(operand 1) |        11            | src1(operand 2) |  src2(operand 2) | 
+					 |                                    D2 (next line for operand 2) 			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+MAR <- MDR (fn-transX,LDMAR-1,TMDR-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- IR[rb1] + MDR (r1-IR[rb1],r2-IR[rb1],see line 46)
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+	B ) Subtract
+op-code type = 001
+>>Subtract Immediate 			(subi)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++subi	r1, #43	// r1 ← r1 - 43 sub immediate
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      001       | dst(operand 1) |          00          | src1(operand 2) |  src2(operand 2) | 
+					 |                 									 IMMEDIATE 											 |
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- IR[rb1] - MDR (r1-IR[rb1],r2-IR[rb1],see line 50)
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+>>Subtract Register 			(subr)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++subr	r1, r2	// r1 ← r1 - r2 sub register
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      001       | dst(operand 1) |          01          | src1(operand 2) |         X        |
+
+IR[rb1] <- IR[rb1] - IR[rb2]
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+>>Subtract with Base Indexed Addressing (subx)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++subx	r2,10(r1, r7)	// r2 ← r2 - M[r1+r7+10]
+																			//r2 ← r2 + M[r1 + r7 +M[PC]]; PC ← PC - 2  sub indexed
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		 	 | 0       |     001        | dst(operand 1) |        10            | src1(operand 2) |  src2(operand 2) | 
+			 		 |                                    D2 (next line for operand 2) 			  				             |
+
+
+MAR <- PC
+(fn-transX,LMAR-1,TPC-1)MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- IR[rb1] - MDR (r1-IR[rb1],r2-IR[rx2],see line 50)
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+
+>>Subtract with Memory Indirect Addressing (subn)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++subn	@-120(r2, r6)	// r4 ← r4 - M(M(r2 + r6 -120)) sub indirect
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		     | 0       |      001       | dst(operand 1) |        11            | src1(operand 2) |  src2(operand 2) | 
+					 |                                    D2 (next line for operand 2) 			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+MAR <- MDR  (fn-transX, LMAR-1,TMDR-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+IR[rb1] <- IR[rb1] - MDR (r1-IR[rb1],r2-IR[rx2],see line 50)
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+
+	C ) Comparison
+op-code type = 010
++++++++++++++++++++++++++++++++++++++++++++++++++++++++mnsi	r1, #43	// compare r1 - 43 compare immediate
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      010       | dst(operand 1) |          00          | src1(operand 2) |  src2(operand 2) | 
+					 |                 									 IMMEDIATE 											 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+temp <- IR[rb1] - MDR  	(r1-IR[rb1],r2-IR[rx2],see line 50)//temp temporarily stores the status
+PC <- PC + 2 (r1-PC,r2-2,see line 46)     		//check satus flags, if minus is true then r1 < #43 else r1 >= #43
+
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++mnsr	r1, r2	// compare r1 - r2 compare register
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      010       | dst(operand 1) |          01          | src1(operand 2) |         X        |
+
+temp <- IR[rb1] - IR[rb2]  (r1-temp,r1-IR[rb1],r2-IR[rb2],see line 50)	//temp temporarily stores the status
+PC <- PC + 2 (r1-PC,r2-2,see line 46)			//check satus flags, if minus is true then r1 < r2 else r1 >= r2
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++mnsx	r2,10(r1, r7)	// compare r2 - M[r1+r7+10]
+																			//compare r2 + M[r1 + r7 +M[PC]]; PC -> PC + 2  compare indexed
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		 	 | 0       |      010       | dst(operand 1) |        10            | src1(operand 2) |  src2(operand 2) | 
+			 		 |                                    D2 (next line for operand 2) 			  				             |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+temp <- IR[rb1] - MDR (r1-temp,r1-IR[rb1],r2-MDR,see line 50)			//temp temporarily stores the status
+PC <- PC + 2 (r1-PC,r2-2,see line 46)					//check satus flags, if minus is true then r2 < M[r1+r7+10] 
+
+
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++mnsn	r4,@-120(r2, r6)	// compare r4 - M(M(r2 + r6 -120)) compare indirect
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  		     | 0       |      010       | dst(operand 1) |        11            | src1(operand 2) |  src2(operand 2) | 
+					 |                                    D2 (next line for operand 2) 			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)	
+MDR <- MDR + IR[rb2] (r1-MDR,r2-IR[rb2],see line 46)
+MAR <- MDR + IR[rx2] (r1-MAR,r1-MDR,r2-IR[rx2],see line 46)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+MAR <- MDR (fn-transX,LMAR-1,TMAR-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+temp <- IR[rb1] - MDR (r1-temp,r1-IR[rb1],r2-MDR,see line 50)	//temp temporarily stores the status
+PC <- PC + 2 (r1-PC,r2-2,see line 46)				 
+
+
+
+
+
+
+	D ) Complement
+op-code type = 011
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++cmp	r3	// only one register operand instruction
+																// src2 is don't care
+																// r3 ← 2's complement of r3
+																//Comparison is accomplished by subtraction. All these instructions set the status flags.
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 0       |      011       | dst(operand 1) |          X           |       X         |         X        |
+
+IR[rb1] <- NOT(IR[rb1]) (fn-compl,T IR[rb1]-1,L IR[rb1]-1)
+PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+	E ) and 
+	op-code type = 100
+
+	F ) or
+	op-code type = 101
+===================================================================================================================================================================
+
+
+
+B ) NON-ALU 
+op-code = 1
+
+
+III ) Jump instructions:
+op-code = 1
+
+General assembly instruction format: op-code	dst
+It's a two word instruction where the second word contains a signed displacement relative to the PC. (So only one addressing mode allowed.) 
+
+*Z(zero), C(carry), O(overflow), M(minus) are status flags output from the ALU into the controller
+*Since only one address is required so the bits for dst(operand 1) are useless, so they are used to determine the jump instruction type out of 9.
+*So, the ninth bit is kept useless whereas the first two bits of the operand 1 are used for jump instruction type.
+
+
+*14th bit defines if the non alu operation is jump or subrutine call
+*if 14th bit is 0 then jump instruction
+*if 14th bit is 1 then subroutine call instruction
+
+Interpretation:
+j	addr	// if (true) PC ← PC + M[PC]
+jnm	addr	// if (not S) PC ← PC + M[PC], where "not S"
+			// indicates that the result of last ALU
+			// operation was not negative.
+			//The rest are similar.
+
+jump types are stored in 14-10 bits i.e two bits in the destination.
+
+	A ) j (jump unconditionally)
+op-code type = 0000
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00000       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+PC <- MDR (fn-transX,LPC-1,TMDR-1) 
+PC <- PC + 2 (r1-PC,r2-2,see line 46)	
+
+
+	B ) jz (jump on zero (flag set)
+op-code type = 0001
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00001       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if Z is true 
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+	C ) jnz (jump on not zero)
+op-code type = 0010
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00010       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if Z is false
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+	D ) jc (jump on carry)
+op-code type = 0011
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00011       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if C is true 
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+	E ) jnc (jump on not carry)
+op-code type = 0100
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00100       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if C is false 
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+	F ) jv (jump on overflow)
+op-code type = 0101
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00101       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if V is true 
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+	G ) jnv (jump on not overflow)
+op-code type = 0110
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00110       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if V is false
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+	H ) jm (jump on minus (sign flag set))
+op-code type = 0111
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    00111       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if S is true 
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+	I ) jnm (jump on not minus)
+op-code type = 01000
+
+
+BITS (inclusive):	 | 15	   |	14-10 	    |	9-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |    01000       |      X         |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+if S is false 
+	then PC <- MDR (fn-transX,LPC-1,TMDR-1)
+else PC <- PC + 2 (r1-PC,r2-2,see line 46)
+
+
+
+
+===============================================================================================================================================================================================
+
+
+
+
+IV ) Subroutine call and return: jal (jump and link), jr (jump to return)
+Assembly instruction format: jal	link register	subroutine address
+op-code = 1
+
+*14th bit defines if the non alu operation is subroutine call or jump instruction
+*if 14th bit is 0 then jump instruction
+*if 14th bit is 1 then subroutine call instruction
+
+Interpretation:
+	A ) Jump and Link Instruction : op-code type = 000
+
+	jal	r5, sub	// r5 ← PC+2; PC ← PC + M[PC], where M[PC] (the
+					// second word) contains the address of the first
+					// instruction of the subroutine "sub" relative
+					// to the PC -- better is to permit it to be base
+					// register relative providing for longer jumps --
+					// but for simplicity let's have PC relative.
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |      100       |    dst(link)   |          X           |       X         |         X        |
+					 |                                    PC relative memory address			   						 	 |
+
+temp <- PC + 2 (r1-PC,r2-2,see line 46)
+IR[rb1] <- temp (ra is return address register)  
+MAR <- PC (fn-transX,LMAR-1,TPC-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+PC <- PC + MDR  (r1-PC,r2-MDR,see line 46)
+
+
+	B ) Return instruction: Single operand
+Assembly instruction format: jr	link register
+Interpretation:
+jr	r5	// PC ← r5
+op-code type = 01
+
+BITS (inclusive):	 | 15	   |	14-12 	    |	11-9 	     |	      8-6  	        |	   5-3	      |	     2-0	     |
+FORMAT:  			 | 1       |      101       |    dst(link)   |          X           |       X         |         X        |
+
+MAR <- IR[rb1] (fn-transX,LMAR-1,T IR[rb1]-1)
+MDR <- M[MAR] (TMAR-1,RD-1,LMAR-1,RMARX-1)
+PC <- MDR (fn-transX,LPC-1,TMDR-1)
+
+
+
+===============================================================================================================================================================================================
